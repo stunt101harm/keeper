@@ -231,6 +231,16 @@ async function main(): Promise<void> {
   }
 }
 
+// A detached callback (observed: @solana/web3.js confirm machinery during an
+// RPC 429 storm) must never kill a live trading agent. Anchoring retries by
+// design; everything else degrades gracefully. Log and carry on.
+process.on('unhandledRejection', (reason) => {
+  log.error({ err: String(reason) }, 'unhandledRejection (survived)');
+});
+process.on('uncaughtException', (err) => {
+  log.error({ err: String(err) }, 'uncaughtException (survived)');
+});
+
 main().catch((err) => {
   log.error(err, 'fatal');
   process.exit(1);

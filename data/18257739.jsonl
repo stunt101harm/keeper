@@ -7,3 +7,42 @@
 {"kind":"meta","fixture":{"id":"18257739","home":"Spain","away":"Argentina","kickoffTs":1784487600000,"competition":"World Cup"}}
 {"kind":"score","fixtureId":"18257739","ts":1784149549858,"score":{"home":0,"away":0},"event":"other"}
 {"kind":"score","fixtureId":"18257739","ts":1784149549864,"score":{"home":0,"away":0},"event":"other"}
+{"kind":"odds","fixtureId":"18257739","ts":1784378113898,"odds":{"home":2.375,"draw":3.186,"away":3.772}}
+{"kind":"odds","fixtureId":"18257739","ts":1784378173872,"odds":{"home":2.375,"draw":3.185,"away":3.773}}
+{"kind":"odds","fixtureId":"18257739","ts":1784379062760,"odds":{"home":2.378,"draw":3.189,"away":3.762}}
+{"kind":"odds","fixtureId":"18257739","ts":1784379278570,"odds":{"home":2.377,"draw":3.187,"away":3.767}}
+{"kind":"odds","fixtureId":"18257739","ts":1784379606631,"odds":{"home":2.378,"draw":3.188,"away":3.763}}
+{"kind":"odds","fixtureId":"18257739","ts":1784379646167,"odds":{"home":2.377,"draw":3.187,"away":3.767}}
+{"kind":"odds","fixtureId":"18257739","ts":1784379868205,"odds":{"home":2.378,"draw":3.189,"away":3.761}}
+{"kind":"odds","fixtureId":"18257739","ts":1784379914008,"odds":{"home":2.378,"draw":3.19,"away":3.761}}
+{"kind":"odds","fixtureId":"18257739","ts":1784380154082,"odds":{"home":2.377,"draw":3.192,"away":3.758}}
+{"kind":"odds","fixtureId":"18257739","ts":1784380218195,"odds":{"home":2.376,"draw":3.19,"away":3.764}}
+{"kind":"odds","fixtureId":"18257739","ts":1784380274154,"odds":{"home":2.377,"draw":3.187,"away":3.767}}
+{"kind":"odds","fixtureId":"18257739","ts":1784380660464,"odds":{"home":2.374,"draw":3.197,"away":3.761}}
+{"kind":"odds","fixtureId":"18257739","ts":1784380818206,"odds":{"home":2.375,"draw":3.199,"away":3.755}}
+{"kind":"odds","fixtureId":"18257739","ts":1784380874130,"odds":{"home":2.374,"draw":3.2,"away":3.754}}
+{"kind":"odds","fixtureId":"18257739","ts":1784380928252,"odds":{"home":2.373,"draw":3.198,"away":3.76}}
+{"kind":"odds","fixtureId":"18257739","ts":1784380934113,"odds":{"home":2.374,"draw":3.197,"away":3.761}}
+{"kind":"meta","fixture":{"id":"18257739","home":"Spain","away":"Argentina","kickoffTs":1784487600000,"competition":"World Cup"}}
+{"kind":"score","fixtureId":"18257739","ts":1784149549858,"score":{"home":0,"away":0},"event":"other"}
+{"kind":"score","fixtureId":"18257739","ts":1784149549864,"score":{"home":0,"away":0},"event":"other"}
+{"kind":"odds","fixtureId":"18257739","ts":1784384578277,"odds":{"home":2.358,"draw":3.192,"away":3.808}}
+{"kind":"odds","fixtureId":"18257739","ts":1784384609468,"odds":{"home":2.358,"draw":3.194,"away":3.804}}
+{"kind":"odds","fixtureId":"18257739","ts":1784385128283,"odds":{"home":2.358,"draw":3.195,"away":3.802}}
+{"kind":"odds","fixtureId":"18257739","ts":1784385138278,"odds":{"home":2.365,"draw":3.202,"away":3.775}}
+{"kind":"odds","fixtureId":"18257739","ts":1784385194476,"odds":{"home":2.365,"draw":3.198,"away":3.78}}
+{"kind":"odds","fixtureId":"18257739","ts":1784385684288,"odds":{"home":2.366,"draw":3.2,"away":3.775}}
+{"kind":"odds","fixtureId":"18257739","ts":1784386269469,"odds":{"home":2.375,"draw":3.185,"away":3.775}}
+{"kind":"odds","fixtureId":"18257739","ts":1784386288305,"odds":{"home":2.378,"draw":3.185,"away":3.767}}
+{"kind":"odds","fixtureId":"18257739","ts":1784386299527,"odds":{"home":2.378,"draw":3.185,"away":3.765}}
+{"kind":"odds","fixtureId":"18257739","ts":1784387193950,"odds":{"home":2.381,"draw":3.189,"away":3.754}}
+{"kind":"odds","fixtureId":"18257739","ts":1784387272710,"odds":{"home":2.373,"draw":3.19,"away":3.771}}
+{"kind":"odds","fixtureId":"18257739","ts":1784387339766,"odds":{"home":2.373,"draw":3.189,"away":3.772}}
+{"kind":"odds","fixtureId":"18257739","ts":1784388206741,"odds":{"home":2.378,"draw":3.199,"away":3.749}}
+{"kind":"odds","fixtureId":"18257739","ts":1784388314814,"odds":{"home":2.378,"draw":3.199,"away":3.747}}
+{"kind":"meta","fixture":{"id":"18257739","home":"Spain","away":"Argentina","kickoffTs":1784487600000,"competition":"World Cup"}}
+{"kind":"score","fixtureId":"18257739","ts":1784149549858,"score":{"home":0,"away":0},"event":"other"}
+{"kind":"score","fixtureId":"18257739","ts":1784149549864,"score":{"home":0,"away":0},"event":"other"}
+{"kind":"meta","fixture":{"id":"18257739","home":"Spain","away":"Argentina","kickoffTs":1784487600000,"competition":"World Cup"}}
+{"kind":"score","fixtureId":"18257739","ts":1784149549858,"score":{"home":0,"away":0},"event":"other"}
+{"kind":"score","fixtureId":"18257739","ts":1784149549864,"score":{"home":0,"away":0},"event":"other"}
