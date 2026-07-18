@@ -96,6 +96,19 @@ export function startAnchorer(deps: AnchorerDeps): AnchorerHandle {
   const eventsPath = path.join(dataDir, 'events.jsonl');
   const anchorsPath = path.join(dataDir, 'anchors.jsonl');
 
+  // Seq numbers restart at 0 every process boot, so a blotter appended across
+  // runs would collide with itself and fail verification. Rotate any existing
+  // pair aside so events.jsonl/anchors.jsonl always describe THIS run only
+  // (verify-anchors can be pointed at rotated pairs via its dataDir argument).
+  if (fs.existsSync(eventsPath) && fs.statSync(eventsPath).size > 0) {
+    const suffix = new Date().toISOString().replace(/[:.]/g, '-');
+    fs.renameSync(eventsPath, path.join(dataDir, `events-${suffix}.jsonl`));
+    if (fs.existsSync(anchorsPath)) {
+      fs.renameSync(anchorsPath, path.join(dataDir, `anchors-${suffix}.jsonl`));
+    }
+    log.info({ suffix }, 'chain: rotated previous run blotter');
+  }
+
   // --- blotter: persist every seq-stamped engine event as canonical JSONL ---
   let writeCursor = 0; // index into bus.engineLog of the next record to persist
   const persistNewEvents = (): void => {

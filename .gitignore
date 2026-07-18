@@ -1,5 +1,7 @@
 node_modules/
 dist/
+data/events*.jsonl
+data/anchors*.jsonl
 web/dist/
 web/node_modules/
 .env
