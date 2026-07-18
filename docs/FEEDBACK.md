@@ -39,4 +39,22 @@ submission requirements; edited into a final section before submitting.
 - **`weeks` must be a multiple of 4** — the on-chain error surfaces only from example-code
   validation, not the endpoint docs.
 
+- **Friction (the sharpest one): period-scoped 1X2 variants interleave under the same
+  `SuperOddsType`.** `1X2_PARTICIPANT_RESULT` records with `MarketPeriod: "half=1"` (the
+  first-half-result market) arrive on the same feed as the full-match line. Naively filtering
+  on bookmaker + SuperOddsType mixes two price regimes and produces violent fake jumps (our
+  volatility circuit breaker fired 88 times on one match until we required
+  `MarketPeriod === null && MarketParameters === null`). The docs don't mention `MarketPeriod`
+  values for odds records at all — one paragraph would save every integrator this debugging
+  session.
+- **Docs gap (on-chain verification internals):** recomputing the scores batch root
+  client-side requires two undocumented details we had to reverse-engineer from the deployed
+  devnet program: the main-tree leaf is `sha256(0x01 ‖ borsh(ScoresBatchSummary))` (a leaf
+  domain tag), and the `daily_scores_roots` account header is 10 bytes (8-byte Anchor
+  discriminator + u16 epochDay), then 288 × 32-byte five-minute roots. Both verified
+  byte-exact against live proofs. Documenting the tree construction end-to-end would make
+  third-party verifiers much easier to write.
+- **Liked: proof + root retention on devnet** made all of this verifiable days after the
+  match — our replay demo verifies a semifinal proof against the on-chain root live.
+
 _(entries appended as the build continues)_

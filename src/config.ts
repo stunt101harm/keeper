@@ -25,7 +25,11 @@ const EnvSchema = z.object({
 
   TXLINE_NETWORK: z.enum(['devnet', 'mainnet']).default('devnet'),
   TXLINE_BASE_URL: z.string().optional(),
+  TXLINE_API_TOKEN: z.string().optional(),
   TXLINE_POLL_MS: num(1000),
+  /** Track fixtures kicking off within [now − PAST_H, now + AHEAD_H]. */
+  FIXTURE_WINDOW_PAST_H: num(6),
+  FIXTURE_WINDOW_AHEAD_H: num(36),
 
   SOLANA_SECRET_KEY: z.string().optional(),
   SOLANA_RPC_URL: z.string().default('https://api.devnet.solana.com'),
@@ -47,11 +51,11 @@ const EnvSchema = z.object({
   CLIP_SIZE: num(1), // stake units per fill
   INVENTORY_CAP: num(10), // per-outcome NET EXPOSURE cap -> reduce-only
   MAX_DRAWDOWN: num(5), // equity drawdown from high-water mark -> flatten
-  STALE_FEED_SEC: num(10), // feed-time gap with no ticks -> halt quoting
+  STALE_FEED_SEC: num(12), // feed-time gap with no ticks -> halt quoting
   MIN_QUOTE_PROB: num(0.03), // no new quotes below this fair prob
   MAX_QUOTE_PROB: num(0.97), // ...or above this
   ARB_MARGIN: num(0.01), // post-rounding no-arb margin check
-  BENIGN_A: num(0.12), // benign-flow intensity scale (accumulator gain/tick)
+  BENIGN_A: num(0.08), // benign-flow intensity scale; tuned to ≈3:1 benign:informed on recorded data
   BENIGN_K: num(250), // benign-flow spread sensitivity: I += A·exp(−K·δ)
   WARMUP_TICKS: num(20), // no quoting until the vol estimator has warmed up
   SIGMA_MIN: num(0.005), // floor on σ_logit
@@ -91,7 +95,14 @@ export interface Config {
   mode: 'live' | 'replay';
   replay: { file: string; speed: number; loop: boolean };
   server: { port: number; host: string };
-  txline: { network: 'devnet' | 'mainnet'; baseUrl?: string; pollMs: number };
+  txline: {
+    network: 'devnet' | 'mainnet';
+    baseUrl?: string;
+    apiToken?: string;
+    pollMs: number;
+    fixtureWindowPastH: number;
+    fixtureWindowAheadH: number;
+  };
   solana: {
     secretKey?: string;
     rpcUrl: string;
@@ -110,7 +121,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     txline: {
       network: e.TXLINE_NETWORK,
       ...(e.TXLINE_BASE_URL ? { baseUrl: e.TXLINE_BASE_URL } : {}),
+      ...(e.TXLINE_API_TOKEN ? { apiToken: e.TXLINE_API_TOKEN } : {}),
       pollMs: e.TXLINE_POLL_MS,
+      fixtureWindowPastH: e.FIXTURE_WINDOW_PAST_H,
+      fixtureWindowAheadH: e.FIXTURE_WINDOW_AHEAD_H,
     },
     solana: {
       ...(e.SOLANA_SECRET_KEY ? { secretKey: e.SOLANA_SECRET_KEY } : {}),

@@ -128,5 +128,17 @@ final score reads as inventory drift, not skill.
   truncates the worst region.
 - Marking at consensus mid overstates liquidation value (exit costs a spread); settlement
   closes the gap at full time.
-- The benign-flow leg is a fluid-limit model, not order-book data — its parameters (A, k_f) are
-  tuned to a 3:1 benign:informed ratio on recorded World Cup data.
+- The benign-flow leg is a fluid-limit model, not order-book data. Its accumulator gains
+  per-tick, so realized flow scales with feed cadence: on the synthetic 5-second feed the
+  defaults produce ≈3:1 benign:informed, while on the real ~1 tick/second TxLINE feed the
+  ratio runs much richer (≈39:1 on the England–Argentina recording) because the demargined
+  consensus rarely gaps through a resting quote between dense ticks. Both fill legs remain
+  active and separately attributed; a time-scaled intensity (A per feed-second) is the
+  natural refinement.
+
+## 10. Measured results (real recording, England v Argentina, defaults)
+
+Quote uptime 92.9% two-sided (losses = goal/VAR freezes + suspensions), 317 fills
+(309 benign / 8 informed), max |net exposure| 1.67 of cap 10, zero circuit-breaker
+false-fires, settled 1–2 away. P&L +2.94 stake units: spread capture +2.04, inventory
+drift +0.86, settlement residual +0.03 — reproduce with `npx tsx scripts/stats.ts`.

@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "keeper",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-07-01",
+  "observability": { "enabled": true },
+  "containers": [
+    {
+      "class_name": "KeeperContainer",
+      "image": "./Dockerfile",
+      "max_instances": 1,
+      "instance_type": "basic"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "KEEPER", "class_name": "KeeperContainer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KeeperContainer"] }]
+}
