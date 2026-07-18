@@ -8,6 +8,58 @@
   },
   "instructions": [
     {
+      "name": "close_book",
+      "docs": [
+        "Close an UNSETTLED book, returning rent to the authority. Exists for",
+        "operational resets (e.g. a book anchored by a run that was later",
+        "fixed) — and deliberately refuses settled books: a proven outcome,",
+        "once recorded, is permanent."
+      ],
+      "discriminator": [
+        216,
+        209,
+        72,
+        159,
+        209,
+        206,
+        135,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Only the book's authority may close it; rent returns to them."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "book",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "book.fixture_id",
+                "account": "BookState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "init_book",
       "docs": [
         "Open the on-chain book for one fixture. The payer becomes the only",
@@ -355,6 +407,11 @@
       "code": 6010,
       "name": "NoValidationResult",
       "msg": "TxLINE returned no validation result"
+    },
+    {
+      "code": 6011,
+      "name": "SettledBookIsPermanent",
+      "msg": "settled books are permanent — refusing to close"
     }
   ],
   "types": [

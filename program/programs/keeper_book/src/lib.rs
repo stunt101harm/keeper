@@ -276,6 +276,8 @@ pub enum KeeperBookError {
     InvalidTxlineProgram,
     #[msg("TxLINE returned no validation result")]
     NoValidationResult,
+    #[msg("settled books are permanent — refusing to close")]
+    SettledBookIsPermanent,
 }
 
 // ---------------------------------------------------------------------------
@@ -339,6 +341,21 @@ pub struct SettleBook<'info> {
     /// CPI target is executable.
     #[account(address = TXORACLE_ID @ KeeperBookError::InvalidTxlineProgram)]
     pub txline_program: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CloseBook<'info> {
+    /// Only the book's authority may close it; rent returns to them.
+    #[account(mut, address = book.authority @ KeeperBookError::Unauthorized)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [BOOK_SEED, &book.fixture_id.to_le_bytes()],
+        bump = book.bump,
+        close = authority,
+    )]
+    pub book: Account<'info, BookState>,
 }
 
 #[program]
@@ -555,6 +572,18 @@ pub mod keeper_book {
             epoch_day,
             proof_ts: payload.ts,
         });
+        Ok(())
+    }
+
+    /// Close an UNSETTLED book, returning rent to the authority. Exists for
+    /// operational resets (e.g. a book anchored by a run that was later
+    /// fixed) — and deliberately refuses settled books: a proven outcome,
+    /// once recorded, is permanent.
+    pub fn close_book(ctx: Context<CloseBook>) -> Result<()> {
+        require!(
+            ctx.accounts.book.status == STATUS_OPEN,
+            KeeperBookError::SettledBookIsPermanent
+        );
         Ok(())
     }
 }

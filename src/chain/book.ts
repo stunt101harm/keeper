@@ -450,6 +450,24 @@ export class BookClient {
     return this.send([ix]);
   }
 
+  /**
+   * close_book: authority-only operational reset for an UNSETTLED book
+   * (rent returns to the authority). The program refuses settled books —
+   * proven outcomes are permanent.
+   */
+  async closeBook(fixtureId: bigint | number | string): Promise<string> {
+    const fid = BigInt(fixtureId);
+    const ix = new TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        { pubkey: this.signer.publicKey, isSigner: true, isWritable: true },
+        { pubkey: this.bookAddress(fid), isSigner: false, isWritable: true },
+      ],
+      data: ixDiscriminator('close_book'),
+    });
+    return this.send([ix]);
+  }
+
   /** init_book exactly once per fixture; safe to call repeatedly. */
   async ensureBook(
     fixtureId: bigint | number | string,

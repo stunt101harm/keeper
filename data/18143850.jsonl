@@ -48,3 +48,4 @@
 {"kind":"odds","fixtureId":"18143850","ts":1784377489438,"odds":{"home":1.069,"draw":21.2,"away":58.005},"suspended":true}
 {"kind":"meta","fixture":{"id":"18143850","home":"Vietnam","away":"Myanmar","kickoffTs":1784376000000,"competition":"Friendlies"}}
 {"kind":"odds","fixtureId":"18143850","ts":1784377560869,"odds":{"home":1.069,"draw":21.2,"away":58.997}}
+{"kind":"odds","fixtureId":"18143850","ts":1784377622428,"odds":{"home":1.069,"draw":21.2,"away":58.997},"suspended":true}
