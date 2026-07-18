@@ -100,6 +100,11 @@ export interface Trade {
   size: number;
   /** Consensus fair prob at fill time (for slippage/adverse-selection analysis). */
   midAtFill: number;
+  /**
+   * 'informed': consensus mid crossed our quote (adverse selection leg).
+   * 'benign': deterministic uninformed-flow leg (intensity accumulator fill).
+   */
+  fillType: 'informed' | 'benign';
 }
 
 export interface RiskTransition {
@@ -126,9 +131,18 @@ export interface BookSnapshot {
   ts: number;
   /** Signed inventory per outcome (stake units). */
   inventory: Record<Outcome, number>;
+  /** Net exposure u_i = q_i − mean(q) — the risk-bearing component. */
+  netExposure: Record<Outcome, number>;
   realizedPnl: number;
   /** Mark-to-market P&L of open inventory vs current fair. */
   mtmPnl: number;
+  /**
+   * P&L decomposition (cumulative): spreadCapture = Σ side·(mid−fill)·size at
+   * fill time; inventoryDrift = Σ q·Δmid between ticks; settlementResidual =
+   * settlement value − final marks. spreadCapture + inventoryDrift +
+   * settlementResidual = realizedPnl + mtmPnl at all times.
+   */
+  pnl: { spreadCapture: number; inventoryDrift: number; settlementResidual: number };
   tradeCount: number;
 }
 

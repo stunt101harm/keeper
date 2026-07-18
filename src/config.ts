@@ -20,7 +20,7 @@ const EnvSchema = z.object({
   REPLAY_SPEED: num(10),
   REPLAY_LOOP: bool(true),
 
-  PORT: num(8787),
+  PORT: num(8790),
   HOST: z.string().default('0.0.0.0'),
 
   TXLINE_NETWORK: z.enum(['devnet', 'mainnet']).default('devnet'),
@@ -32,22 +32,32 @@ const EnvSchema = z.object({
   ANCHOR_INTERVAL_SEC: num(30),
   ANCHOR_ENABLED: bool(true),
 
-  // Engine parameters (probability space unless noted)
-  GAMMA: num(0.5), // risk aversion in reservation-price skew
-  DELTA_MIN: num(0.008), // minimum half-spread
-  DELTA_MAX: num(0.06), // maximum half-spread
-  K_VOL: num(1.5), // half-spread volatility multiplier
-  EWMA_HALF_LIFE_SEC: num(120), // volatility estimator half-life
-  FREEZE_GOAL_SEC: num(45),
-  FREEZE_VAR_SEC: num(90),
-  FREEZE_RED_CARD_SEC: num(30),
+  // Engine parameters (probability space unless noted). Defaults are the
+  // adversarially-reviewed values — justifications in docs/MODEL.md.
+  GAMMA: num(20), // risk aversion; calibrated so skew at full cap ≈ one half-spread
+  DELTA_MIN: num(0.005), // minimum half-spread (50 bps); 3·δ_min = structural overround
+  DELTA_MAX: num(0.04), // maximum half-spread
+  K_VOL: num(1.5), // half-spread volatility multiplier (on σ_prob)
+  EWMA_HALF_LIFE_TICKS: num(25), // volatility estimator half-life, in odds ticks
+  FREEZE_GOAL_SEC: num(30), // feed-time seconds
+  FREEZE_VAR_SEC: num(120), // VAR: until resolution + 10s, capped here
+  FREEZE_RED_CARD_SEC: num(20),
+  REENTRY_WIDEN_MULT: num(2), // spread multiplier on freeze exit...
+  REENTRY_DECAY_TICKS: num(25), // ...decaying to 1 over this many ticks
   CLIP_SIZE: num(1), // stake units per fill
-  INVENTORY_CAP: num(10), // per-outcome absolute inventory cap
-  MAX_DRAWDOWN: num(8), // per-match equity drawdown -> flatten mode
-  STALE_FEED_SEC: num(20), // no ticks for this long -> halt quoting
-  MIN_QUOTE_PROB: num(0.03), // stop quoting an outcome below this fair prob
+  INVENTORY_CAP: num(10), // per-outcome NET EXPOSURE cap -> reduce-only
+  MAX_DRAWDOWN: num(5), // equity drawdown from high-water mark -> flatten
+  STALE_FEED_SEC: num(10), // feed-time gap with no ticks -> halt quoting
+  MIN_QUOTE_PROB: num(0.03), // no new quotes below this fair prob
   MAX_QUOTE_PROB: num(0.97), // ...or above this
-  ARB_MARGIN: num(0.01), // enforced no-arb margin across the outcome set
+  ARB_MARGIN: num(0.01), // post-rounding no-arb margin check
+  BENIGN_A: num(0.12), // benign-flow intensity scale (accumulator gain/tick)
+  BENIGN_K: num(250), // benign-flow spread sensitivity: I += A·exp(−K·δ)
+  WARMUP_TICKS: num(20), // no quoting until the vol estimator has warmed up
+  SIGMA_MIN: num(0.005), // floor on σ_logit
+  SIGMA_MAX: num(0.2), // cap on σ_logit
+  JUMP_SIGMA_MULT: num(5), // circuit breaker: |Δlogit| > max(mult·σ, JUMP_LOGIT_ABS)
+  JUMP_LOGIT_ABS: num(0.5),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -57,8 +67,10 @@ export interface EngineParams {
   deltaMin: number;
   deltaMax: number;
   kVol: number;
-  ewmaHalfLifeSec: number;
+  ewmaHalfLifeTicks: number;
   freezeSec: { goal: number; var: number; red_card: number };
+  reentryWidenMult: number;
+  reentryDecayTicks: number;
   clipSize: number;
   inventoryCap: number;
   maxDrawdown: number;
@@ -66,6 +78,13 @@ export interface EngineParams {
   minQuoteProb: number;
   maxQuoteProb: number;
   arbMargin: number;
+  benignA: number;
+  benignK: number;
+  warmupTicks: number;
+  sigmaMin: number;
+  sigmaMax: number;
+  jumpSigmaMult: number;
+  jumpLogitAbs: number;
 }
 
 export interface Config {
@@ -104,8 +123,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       deltaMin: e.DELTA_MIN,
       deltaMax: e.DELTA_MAX,
       kVol: e.K_VOL,
-      ewmaHalfLifeSec: e.EWMA_HALF_LIFE_SEC,
+      ewmaHalfLifeTicks: e.EWMA_HALF_LIFE_TICKS,
       freezeSec: { goal: e.FREEZE_GOAL_SEC, var: e.FREEZE_VAR_SEC, red_card: e.FREEZE_RED_CARD_SEC },
+      reentryWidenMult: e.REENTRY_WIDEN_MULT,
+      reentryDecayTicks: e.REENTRY_DECAY_TICKS,
       clipSize: e.CLIP_SIZE,
       inventoryCap: e.INVENTORY_CAP,
       maxDrawdown: e.MAX_DRAWDOWN,
@@ -113,6 +134,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       minQuoteProb: e.MIN_QUOTE_PROB,
       maxQuoteProb: e.MAX_QUOTE_PROB,
       arbMargin: e.ARB_MARGIN,
+      benignA: e.BENIGN_A,
+      benignK: e.BENIGN_K,
+      warmupTicks: e.WARMUP_TICKS,
+      sigmaMin: e.SIGMA_MIN,
+      sigmaMax: e.SIGMA_MAX,
+      jumpSigmaMult: e.JUMP_SIGMA_MULT,
+      jumpLogitAbs: e.JUMP_LOGIT_ABS,
     },
   };
 }
