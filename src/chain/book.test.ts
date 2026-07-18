@@ -41,6 +41,7 @@ describe('discriminators vs generated IDL', () => {
       expect([...ixDiscriminator(ix.name)], ix.name).toEqual(ix.discriminator);
     }
     expect(idl.instructions.map((i) => i.name).sort()).toEqual([
+      'close_book',
       'init_book',
       'record_epoch',
       'settle_book',
