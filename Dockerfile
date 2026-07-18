@@ -3,6 +3,9 @@ FROM node:22-slim AS webbuild
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci --no-audit --no-fund
+# The dashboard imports domain types from the root via the @keeper/types alias
+# (../src/types.ts) — the file must exist in this stage for tsc to pass.
+COPY src/types.ts /app/src/types.ts
 COPY web/ ./
 RUN npm run build
 

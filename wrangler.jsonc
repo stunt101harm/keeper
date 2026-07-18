@@ -4,6 +4,11 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-07-01",
   "observability": { "enabled": true },
+  "vars": {
+    // api.devnet.solana.com blocks Cloudflare egress IPs — use a keyless
+    // third-party devnet RPC for the anchorer (same fix as corner-case).
+    "SOLANA_RPC_URL": "https://rpc.magicblock.app/devnet"
+  },
   "containers": [
     {
       "class_name": "KeeperContainer",

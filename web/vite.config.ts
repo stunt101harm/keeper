@@ -14,8 +14,9 @@ export default defineConfig({
     proxy: Object.fromEntries(
       ['/api', '/health', '/metrics'].map((p) => [
         p,
-        // KEEPER_API lets dev target a different backend (e.g. a mock server)
-        { target: process.env.KEEPER_API ?? 'http://localhost:8790', changeOrigin: true },
+        // Dev-only proxy to the local keeper server (KEEPER_API env override
+        // dropped: it pulled @types/node into the production image build).
+        { target: 'http://localhost:8790', changeOrigin: true },
       ]),
     ),
   },
