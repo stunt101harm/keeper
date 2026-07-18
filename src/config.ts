@@ -15,7 +15,8 @@ const bool = (def: boolean) =>
     .transform((v) => (v === undefined ? def : v === 'true' || v === '1'));
 
 const EnvSchema = z.object({
-  KEEPER_MODE: z.enum(['live', 'replay']).default('replay'),
+  /** auto = orchestrated: live when a tracked fixture is in-play, replay otherwise. */
+  KEEPER_MODE: z.enum(['live', 'replay', 'auto']).default('replay'),
   REPLAY_FILE: z.string().default('data/sample-match.jsonl'),
   REPLAY_SPEED: num(10),
   REPLAY_LOOP: bool(true),
@@ -37,6 +38,9 @@ const EnvSchema = z.object({
   SOLANA_RPC_URL: z.string().default('https://api.devnet.solana.com'),
   ANCHOR_INTERVAL_SEC: num(30),
   ANCHOR_ENABLED: bool(true),
+  /** program = typed keeper_book accounts + proof-gated settlement; memo = legacy fallback. */
+  ANCHOR_TARGET: z.enum(['program', 'memo']).default('memo'),
+  KEEPER_PROGRAM_ID: z.string().optional(),
 
   // Engine parameters (probability space unless noted). Defaults are the
   // adversarially-reviewed values — justifications in docs/MODEL.md.
@@ -94,7 +98,7 @@ export interface EngineParams {
 }
 
 export interface Config {
-  mode: 'live' | 'replay';
+  mode: 'live' | 'replay' | 'auto';
   replay: { file: string; speed: number; loop: boolean; start: 'begin' | 'kickoff' };
   server: { port: number; host: string };
   txline: {
@@ -110,6 +114,8 @@ export interface Config {
     rpcUrl: string;
     anchorIntervalSec: number;
     anchorEnabled: boolean;
+    anchorTarget: 'program' | 'memo';
+    programId?: string;
   };
   engine: EngineParams;
 }
@@ -133,6 +139,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       rpcUrl: e.SOLANA_RPC_URL,
       anchorIntervalSec: e.ANCHOR_INTERVAL_SEC,
       anchorEnabled: e.ANCHOR_ENABLED,
+      anchorTarget: e.ANCHOR_TARGET,
+      ...(e.KEEPER_PROGRAM_ID ? { programId: e.KEEPER_PROGRAM_ID } : {}),
     },
     engine: {
       gamma: e.GAMMA,

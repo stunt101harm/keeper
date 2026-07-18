@@ -31,7 +31,8 @@ function publishStatus(feed: StatusEvent['feed']): void {
   bus.publishStatus({
     kind: 'status',
     ts: Date.now(),
-    mode: config.mode,
+    // Effective source; 'auto' resolves at runtime (wave-2 orchestrator).
+    mode: config.mode === 'live' ? 'live' : 'replay',
     feed,
     lastTickTs,
     fixtures: [...fixtures.values()],
