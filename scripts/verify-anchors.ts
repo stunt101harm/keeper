@@ -6,13 +6,19 @@
  * corresponding devnet transaction, and compares roots. Any mismatch
  * (including a single flipped byte in events.jsonl) exits 1.
  *
- * Two anchor targets, detected PER RECORD from the blotter line:
- *  - memo records (no `target` field): the root lives in the Memo
- *    instruction's JSON payload — verified as before.
- *  - `target: "program"` records: the root lives in the keeper_book
- *    program's EpochRecorded event (Anchor `Program data:` log), alongside
- *    the seq range the CHAIN accepted under its continuity gate. The event's
- *    seq_end is exclusive; the blotter's is inclusive (+1 conversion here).
+ * Three record shapes, detected PER RECORD from the blotter line:
+ *  - memo records WITHOUT a fixtureId: legacy contiguous global window — the
+ *    root covers EVERY blotter seq in seqStart..seqEnd and lives in the Memo
+ *    instruction's JSON payload. Verified as before.
+ *  - `target: "program"` records: one PER-FIXTURE group — the root covers the
+ *    blotter events with that fixtureId inside seqStart..seqEnd (global seqs;
+ *    other fixtures' events interleave and are NOT included). The on-chain
+ *    root lives in the keeper_book EpochRecorded event (Anchor `Program
+ *    data:` log) alongside CHAIN-LOCAL bounds, which must equal the record's
+ *    chainStart..chainStart+count.
+ *  - memo records WITH a fixtureId (`target: "memo-fixture"`): a per-fixture
+ *    group demoted by the continuity fallback — same fixture-filtered root
+ *    recompute, compared against the memo payload's root.
  *
  * Usage: npx tsx scripts/verify-anchors.ts [dataDir]
  */
@@ -31,7 +37,7 @@ const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 
 interface BlotterRecord {
   seq: number;
-  event: unknown;
+  event: { fixtureId?: string };
 }
 
 interface AnchorRecord {
@@ -40,9 +46,13 @@ interface AnchorRecord {
   root: string;
   status: string;
   sig?: string;
-  /** 'program' for record_epoch anchors; absent/'memo' for memo anchors. */
+  /** 'program' | 'memo-fixture' for per-fixture groups; absent for legacy memo. */
   target?: string;
   fixtureId?: string;
+  /** Program groups: chain-local start accepted by the continuity gate. */
+  chainStart?: number;
+  /** Per-fixture groups: number of events the root covers. */
+  count?: number;
 }
 
 function readJsonl<T>(file: string): T[] {
@@ -71,16 +81,24 @@ async function fetchMemoPayload(connection: Connection, sig: string): Promise<st
   return null;
 }
 
-/** On-chain root for a memo anchor: the memo's JSON payload. */
+/** On-chain root for a memo anchor (legacy or memo-fixture): the memo's JSON payload. */
 async function onChainRootFromMemo(connection: Connection, anchor: AnchorRecord): Promise<string> {
   if (!anchor.sig) return '(no sig)';
   const payload = await fetchMemoPayload(connection, anchor.sig);
   if (!payload) return '(tx not found)';
   try {
-    const memo = JSON.parse(payload) as { root?: string; seqStart?: number; seqEnd?: number };
+    const memo = JSON.parse(payload) as {
+      root?: string;
+      seqStart?: number;
+      seqEnd?: number;
+      fixtureId?: string;
+    };
     let root = memo.root ?? '(no root in memo)';
     if (memo.seqStart !== anchor.seqStart || memo.seqEnd !== anchor.seqEnd) {
       root += ` (range mismatch: memo says ${memo.seqStart}..${memo.seqEnd})`;
+    }
+    if (anchor.fixtureId !== undefined && memo.fixtureId !== anchor.fixtureId) {
+      root += ` (fixture mismatch: memo says ${memo.fixtureId ?? '(none)'})`;
     }
     return root;
   } catch {
@@ -90,8 +108,10 @@ async function onChainRootFromMemo(connection: Connection, anchor: AnchorRecord)
 
 /**
  * On-chain root for a program anchor: the EpochRecorded event emitted by the
- * keeper_book record_epoch transaction. The event's seq range must cover the
- * blotter record exactly (chain seq_end is exclusive → blotter seqEnd + 1).
+ * keeper_book record_epoch transaction. The event carries CHAIN-LOCAL bounds
+ * (exclusive end) which must equal chainStart..chainStart+count. Legacy
+ * records without chainStart fall back to the old global-range check
+ * (chain seq_end is exclusive → blotter seqEnd + 1).
  */
 async function onChainRootFromEvent(connection: Connection, anchor: AnchorRecord): Promise<string> {
   if (!anchor.sig) return '(no sig)';
@@ -104,15 +124,25 @@ async function onChainRootFromEvent(connection: Connection, anchor: AnchorRecord
   const event = events[0];
   if (!event) return '(no EpochRecorded event in tx)';
   let root = event.rootHex;
-  if (event.seqStart !== anchor.seqStart || event.seqEnd !== anchor.seqEnd + 1) {
-    root += ` (range mismatch: event says ${event.seqStart}..${event.seqEnd} excl)`;
+  const expectedStart = anchor.chainStart ?? anchor.seqStart;
+  const expectedEndExclusive =
+    anchor.chainStart !== undefined && anchor.count !== undefined
+      ? anchor.chainStart + anchor.count
+      : anchor.seqEnd + 1;
+  if (event.seqStart !== expectedStart || event.seqEnd !== expectedEndExclusive) {
+    root += ` (chain-bounds mismatch: event says ${event.seqStart}..${event.seqEnd} excl, expected ${expectedStart}..${expectedEndExclusive} excl)`;
+  }
+  if (anchor.fixtureId !== undefined && event.fixtureId !== anchor.fixtureId) {
+    root += ` (fixture mismatch: event says ${event.fixtureId})`;
   }
   return root;
 }
 
 async function main(): Promise<void> {
+  const blotter = readJsonl<BlotterRecord>(eventsPath);
   const events = new Map<number, BlotterRecord>();
-  for (const rec of readJsonl<BlotterRecord>(eventsPath)) events.set(rec.seq, rec);
+  for (const rec of blotter) events.set(rec.seq, rec);
+  const ordered = [...blotter].sort((a, b) => a.seq - b.seq);
 
   const anchors = readJsonl<AnchorRecord>(anchorsPath).filter((a) => a.status === 'confirmed');
   if (anchors.length === 0) {
@@ -125,7 +155,8 @@ async function main(): Promise<void> {
   const pad = (s: string, n: number) => s.padEnd(n);
   console.log(
     pad('RANGE', 14) +
-      pad('TARGET', 9) +
+      pad('TARGET', 14) +
+      pad('FIXTURE', 10) +
       pad('RECOMPUTED ROOT', 66) +
       pad('ON-CHAIN ROOT', 66) +
       'VERDICT',
@@ -133,21 +164,43 @@ async function main(): Promise<void> {
 
   for (const anchor of anchors) {
     const range = `${anchor.seqStart}..${anchor.seqEnd}`;
-    const target = anchor.target === 'program' ? 'program' : 'memo';
+    const target =
+      anchor.target === 'program'
+        ? 'program'
+        : anchor.fixtureId !== undefined
+          ? 'memo-fixture'
+          : 'memo';
+    const fixture = anchor.fixtureId ?? '-';
     const leaves: Buffer[] = [];
-    let missing: number | null = null;
-    for (let seq = anchor.seqStart; seq <= anchor.seqEnd; seq++) {
-      const rec = events.get(seq);
-      if (!rec) {
-        missing = seq;
-        break;
+    let problem: string | null = null;
+
+    if (anchor.fixtureId !== undefined) {
+      // Per-fixture group: the root covers this fixture's events inside the
+      // global range — other fixtures' events interleave and are excluded.
+      for (const rec of ordered) {
+        if (rec.seq < anchor.seqStart || rec.seq > anchor.seqEnd) continue;
+        if (rec.event?.fixtureId !== anchor.fixtureId) continue;
+        leaves.push(leafHash({ seq: rec.seq, event: rec.event }));
       }
-      // Recompute the leaf from the parsed record via canonicalJson — catches
-      // any value tampering regardless of on-disk formatting.
-      leaves.push(leafHash({ seq: rec.seq, event: rec.event }));
+      if (leaves.length === 0) problem = `no blotter events for fixture ${anchor.fixtureId} in range`;
+      else if (anchor.count !== undefined && leaves.length !== anchor.count) {
+        problem = `blotter has ${leaves.length} events for fixture ${anchor.fixtureId} in range, record says ${anchor.count}`;
+      }
+    } else {
+      // Legacy contiguous global window: every seq must be present.
+      for (let seq = anchor.seqStart; seq <= anchor.seqEnd; seq++) {
+        const rec = events.get(seq);
+        if (!rec) {
+          problem = `MISSING seq ${seq} in blotter`;
+          break;
+        }
+        // Recompute the leaf from the parsed record via canonicalJson — catches
+        // any value tampering regardless of on-disk formatting.
+        leaves.push(leafHash({ seq: rec.seq, event: rec.event }));
+      }
     }
-    if (missing !== null) {
-      console.log(pad(range, 14) + pad(target, 9) + `MISSING seq ${missing} in blotter — MISMATCH`);
+    if (problem !== null) {
+      console.log(pad(range, 14) + pad(target, 14) + pad(fixture, 10) + `${problem} — MISMATCH`);
       failed = true;
       continue;
     }
@@ -162,7 +215,8 @@ async function main(): Promise<void> {
     if (!match) failed = true;
     console.log(
       pad(range, 14) +
-        pad(target, 9) +
+        pad(target, 14) +
+        pad(fixture, 10) +
         pad(recomputed, 66) +
         pad(onChainRoot, 66) +
         (match ? 'MATCH' : 'MISMATCH'),

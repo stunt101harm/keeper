@@ -23,11 +23,12 @@ import { TXLINE_PROGRAM_ID, type StatValidationProof } from './txproof.js';
  * the generated IDL (program/idl/keeper_book.json) in book.test.ts — drift
  * between this file and the on-chain program fails CI, not settlement.
  *
- * Seq-range convention: the BLOTTER uses inclusive ranges (AnchorBatch
- * seqStart..seqEnd), the CHAIN stores the exclusive bound (`seq_end` == next
- * expected seq) so the continuity gate is one equality with no first-epoch
- * special case. `recordEpoch` takes the exclusive bound; callers convert with
- * `batch.seqEnd + 1`.
+ * Seq-range convention: the BLOTTER uses inclusive GLOBAL ranges (AnchorBatch
+ * seqStart..seqEnd), the CHAIN stores CHAIN-LOCAL per-fixture bounds with an
+ * exclusive end (`seq_end` == total events anchored for the fixture == next
+ * expected seq_start) so the continuity gate is one equality with no
+ * first-epoch special case. `recordEpoch` takes the chain-local bounds
+ * directly (the anchorer's EpochCommit chainStart/chainEndExclusive).
  */
 
 // ---------------------------------------------------------------------------
@@ -139,9 +140,9 @@ export function encodeInitBookData(
 export interface EpochArgs {
   /** 32-byte merkle root. */
   root: Uint8Array;
-  /** Inclusive start of the blotter seq range. */
+  /** Chain-local start = events already anchored for this fixture (continuity gate). */
   seqStart: number;
-  /** EXCLUSIVE end (= blotter batch seqEnd + 1). */
+  /** EXCLUSIVE chain-local end (= seqStart + event count of this epoch). */
   seqEndExclusive: number;
   /** Signed inventory [home, draw, away], stake units ×1e6. */
   inventoryMicro: [number, number, number];

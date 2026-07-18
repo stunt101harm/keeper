@@ -1,0 +1,19 @@
+{"kind":"meta","fixture":{"id":"18257865","home":"France","away":"England","kickoffTs":1784408400000,"competition":"World Cup"}}
+{"kind":"score","fixtureId":"18257865","ts":1784149585543,"score":{"home":0,"away":0},"event":"other"}
+{"kind":"score","fixtureId":"18257865","ts":1784149585549,"score":{"home":0,"away":0},"event":"other"}
+{"kind":"odds","fixtureId":"18257865","ts":1784376740813,"odds":{"home":1.936,"draw":4.3,"away":3.986}}
+{"kind":"odds","fixtureId":"18257865","ts":1784376775812,"odds":{"home":1.941,"draw":4.286,"away":3.978}}
+{"kind":"odds","fixtureId":"18257865","ts":1784376885205,"odds":{"home":1.941,"draw":4.285,"away":3.978}}
+{"kind":"odds","fixtureId":"18257865","ts":1784376885402,"odds":{"home":1.941,"draw":4.285,"away":3.979}}
+{"kind":"odds","fixtureId":"18257865","ts":1784376900238,"odds":{"home":1.94,"draw":4.287,"away":3.981}}
+{"kind":"odds","fixtureId":"18257865","ts":1784376900333,"odds":{"home":1.939,"draw":4.289,"away":3.984}}
+{"kind":"odds","fixtureId":"18257865","ts":1784376945824,"odds":{"home":1.937,"draw":4.289,"away":3.99}}
+{"kind":"odds","fixtureId":"18257865","ts":1784376948170,"odds":{"home":1.937,"draw":4.287,"away":3.991}}
+{"kind":"meta","fixture":{"id":"18257865","home":"France","away":"England","kickoffTs":1784408400000,"competition":"World Cup"}}
+{"kind":"score","fixtureId":"18257865","ts":1784149585543,"score":{"home":0,"away":0},"event":"other"}
+{"kind":"score","fixtureId":"18257865","ts":1784149585549,"score":{"home":0,"away":0},"event":"other"}
+{"kind":"odds","fixtureId":"18257865","ts":1784377400848,"odds":{"home":1.939,"draw":4.288,"away":3.985}}
+{"kind":"odds","fixtureId":"18257865","ts":1784377416287,"odds":{"home":1.939,"draw":4.289,"away":3.984}}
+{"kind":"meta","fixture":{"id":"18257865","home":"France","away":"England","kickoffTs":1784408400000,"competition":"World Cup"}}
+{"kind":"score","fixtureId":"18257865","ts":1784149585543,"score":{"home":0,"away":0},"event":"other"}
+{"kind":"score","fixtureId":"18257865","ts":1784149585549,"score":{"home":0,"away":0},"event":"other"}
