@@ -19,6 +19,8 @@ const EnvSchema = z.object({
   REPLAY_FILE: z.string().default('data/sample-match.jsonl'),
   REPLAY_SPEED: num(10),
   REPLAY_LOOP: bool(true),
+  /** 'begin' = full recording; 'kickoff' = skip to 2min before kickoff (judge-friendly cold starts). */
+  REPLAY_START: z.enum(['begin', 'kickoff']).default('begin'),
 
   PORT: num(8790),
   HOST: z.string().default('0.0.0.0'),
@@ -93,7 +95,7 @@ export interface EngineParams {
 
 export interface Config {
   mode: 'live' | 'replay';
-  replay: { file: string; speed: number; loop: boolean };
+  replay: { file: string; speed: number; loop: boolean; start: 'begin' | 'kickoff' };
   server: { port: number; host: string };
   txline: {
     network: 'devnet' | 'mainnet';
@@ -116,7 +118,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const e = EnvSchema.parse(env);
   return {
     mode: e.KEEPER_MODE,
-    replay: { file: e.REPLAY_FILE, speed: e.REPLAY_SPEED, loop: e.REPLAY_LOOP },
+    replay: { file: e.REPLAY_FILE, speed: e.REPLAY_SPEED, loop: e.REPLAY_LOOP, start: e.REPLAY_START },
     server: { port: e.PORT, host: e.HOST },
     txline: {
       network: e.TXLINE_NETWORK,

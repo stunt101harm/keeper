@@ -31,6 +31,7 @@ export class KeeperContainer extends Container<Env> {
       REPLAY_FILE: env.REPLAY_FILE ?? 'data/18241006-england-argentina.jsonl',
       REPLAY_SPEED: '10',
       REPLAY_LOOP: 'true',
+      REPLAY_START: 'kickoff',
       TXLINE_NETWORK: 'devnet',
       ...(env.SOLANA_SECRET_KEY ? { SOLANA_SECRET_KEY: env.SOLANA_SECRET_KEY } : {}),
       ...(env.TXLINE_API_TOKEN ? { TXLINE_API_TOKEN: env.TXLINE_API_TOKEN } : {}),

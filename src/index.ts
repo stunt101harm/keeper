@@ -51,7 +51,12 @@ async function main(): Promise<void> {
   }
 
   if (config.mode === 'replay') {
-    const source = new ReplaySource(config.replay.file, config.replay.speed, config.replay.loop);
+    const source = new ReplaySource(
+      config.replay.file,
+      config.replay.speed,
+      config.replay.loop,
+      config.replay.start,
+    );
     if (source.fixture) {
       fixtures.set(source.fixture.id, source.fixture);
       state.registerFixture(source.fixture);

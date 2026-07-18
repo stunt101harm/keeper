@@ -21,24 +21,36 @@ export class ReplaySource {
   private timer: NodeJS.Timeout | null = null;
   private stopped = false;
 
+  private readonly startIndex: number;
+
   constructor(
     file: string,
     private readonly speed: number,
     private readonly loop: boolean,
+    start: 'begin' | 'kickoff' = 'begin',
   ) {
     const { fixture, ticks } = parseRecording(readFileSync(file, 'utf8'));
     if (ticks.length === 0) throw new Error(`replay: no ticks in ${file}`);
     this.fixture = fixture;
     this.ticks = ticks;
+    // 'kickoff' drops a cold-started viewer near the action instead of the
+    // pre-match lull (judge-friendly for the deployed instance).
+    this.startIndex =
+      start === 'kickoff' && fixture
+        ? Math.max(
+            0,
+            ticks.findIndex((t) => t.ts >= fixture.kickoffTs - 2 * 60_000),
+          )
+        : 0;
     log.info(
-      { file, ticks: ticks.length, speed, loop, fixture: fixture?.id },
+      { file, ticks: ticks.length, speed, loop, start, startIndex: this.startIndex, fixture: fixture?.id },
       'replay: loaded recording',
     );
   }
 
   start(handlers: ReplayHandlers): void {
     this.stopped = false;
-    this.run(handlers, 0);
+    this.run(handlers, this.startIndex);
   }
 
   private run(handlers: ReplayHandlers, index: number): void {
@@ -48,7 +60,7 @@ export class ReplaySource {
       if (this.loop) {
         log.info('replay: recording finished — looping');
         handlers.onLoopRestart?.();
-        this.timer = setTimeout(() => this.run(handlers, 0), 2000);
+        this.timer = setTimeout(() => this.run(handlers, this.startIndex), 2000);
       } else {
         handlers.onEnd?.();
       }
