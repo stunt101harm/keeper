@@ -30,7 +30,7 @@ export class KeeperContainer extends Container<Env> {
       NODE_ENV: 'production',
       LOG_PRETTY: 'false',
       KEEPER_MODE: env.KEEPER_MODE ?? 'auto',
-      REPLAY_FILE: env.REPLAY_FILE ?? 'data/18241006-england-argentina.jsonl',
+      REPLAY_FILE: env.REPLAY_FILE ?? 'data/18257865-france-england.jsonl',
       REPLAY_SPEED: '10',
       REPLAY_LOOP: 'true',
       REPLAY_START: 'kickoff',
