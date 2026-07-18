@@ -51,7 +51,7 @@ const EnvSchema = z.object({
   CLIP_SIZE: num(1), // stake units per fill
   INVENTORY_CAP: num(10), // per-outcome NET EXPOSURE cap -> reduce-only
   MAX_DRAWDOWN: num(5), // equity drawdown from high-water mark -> flatten
-  STALE_FEED_SEC: num(12), // feed-time gap with no ticks -> halt quoting
+  STALE_FEED_SEC: num(20), // feed-time gap with no ticks -> halt quoting (pre-match cadence is ~15s)
   MIN_QUOTE_PROB: num(0.03), // no new quotes below this fair prob
   MAX_QUOTE_PROB: num(0.97), // ...or above this
   ARB_MARGIN: num(0.01), // post-rounding no-arb margin check

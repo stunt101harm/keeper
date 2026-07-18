@@ -57,6 +57,9 @@ async function main(): Promise<void> {
       state.registerFixture(source.fixture);
     }
     publishStatus('ok');
+    // Periodic status so dashboard clients (and their reconnect watchdogs)
+    // always see a fresh feed state during replay.
+    setInterval(() => publishStatus('ok'), 5000).unref?.();
     source.start({
       onTick: processTick,
       onLoopRestart: () => {

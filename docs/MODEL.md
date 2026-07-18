@@ -140,5 +140,5 @@ final score reads as inventory drift, not skill.
 
 Quote uptime 92.9% two-sided (losses = goal/VAR freezes + suspensions), 317 fills
 (309 benign / 8 informed), max |net exposure| 1.67 of cap 10, zero circuit-breaker
-false-fires, settled 1–2 away. P&L +2.94 stake units: spread capture +2.04, inventory
-drift +0.86, settlement residual +0.03 — reproduce with `npx tsx scripts/stats.ts`.
+false-fires, settled 1–2 away. P&L +2.60 stake units: spread capture +2.04, inventory
+drift +0.53, settlement residual +0.03 — reproduce with `npx tsx scripts/stats.ts`.

@@ -2,44 +2,79 @@
 
 **An autonomous in-play market maker for World Cup outcomes, powered by TxLINE.**
 
-Keeper quotes continuous two-way prices (back/lay) on live 1X2 match outcomes for all World Cup fixtures. It ingests TxLINE's real-time consensus odds and score streams, computes a de-vigged fair value, and quotes around it with an inventory-aware, volatility-adjusted spread — fully autonomously, with no human in the loop. Every quote, fill, and settlement is anchored on Solana devnet, producing a tamper-evident audit trail of the maker's entire book.
+🔴 **Live demo: <https://keeper.h-dhaliwal2250.workers.dev>** — replaying the real
+England v Argentina semifinal (actual TxLINE tick data) at 10× on Cloudflare Containers,
+anchoring its book to Solana devnet as it runs.
 
-Built for the **TxLINE World Cup Hackathon** (agent track).
+Keeper quotes continuous two-way prices on live 1X2 match outcomes. It ingests TxLINE's
+demargined StablePrice consensus and score streams, computes fair value, and quotes around it
+with an inventory-aware, volatility-adjusted spread — fully autonomously. Every quote, fill,
+and settlement is merkle-hashed and anchored on Solana devnet, making the maker's track
+record tamper-evident; and Keeper verifies TxLINE's own on-chain validation proofs for the
+data it trades on. Built for the TxLINE World Cup Hackathon (agent track).
 
 ## How it works
 
 ```
-                ┌────────────────────────────────────────────────┐
-                │                    KEEPER                      │
- TxLINE odds ──▶│ Ingest ──▶ Fair Value ──▶ Quoting ──▶ Quotes  │──▶ Dashboard (SSE)
- TxLINE scores ▶│  layer      (de-vig,      engine      bid/ask │
- TxLINE proofs ▶│  + recorder  volatility)  (A-S style)         │──▶ Solana devnet
-                │                 │            ▲                 │    (audit anchors)
-                │                 ▼            │                 │
-                │             Execution ──▶ Risk manager         │
-                │             simulator     (caps, freezes,      │
-                │             (fills, P&L)   kill-switch)        │
-                └────────────────────────────────────────────────┘
+ TxLINE odds ──▶ Ingest ──▶ Fair Value ──▶ Quoting engine ──▶ Quotes (bid/ask) ─▶ Dashboard (SSE)
+ TxLINE scores ▶ layer      (renorm,       (A-S style,                        └─▶ Solana devnet
+ TxLINE proofs ▶ + recorder  EWMA vol)      sum-neutral skew)                      (audit anchors)
+                                 │              ▲
+                                 ▼              │
+                             Execution ──▶ Risk manager
+                             simulator     (caps, freezes, breaker, kill-switch)
+                             (2-leg fills, P&L decomposition, settlement)
 ```
 
-- **Fair value** — TxLINE consensus odds are de-vigged into an implied probability vector; an EWMA of tick-to-tick log-odds changes estimates in-play volatility.
-- **Quoting** — Avellaneda–Stoikov-inspired: reservation price skewed by inventory, half-spread widened by volatility, quotes pulled entirely during goal/VAR freeze windows.
-- **Execution** — deterministic fill simulation: a resting quote fills when the consensus mid crosses it (models informed flow). Inventory and mark-to-market P&L tracked per outcome; positions settle from TxLINE final scores.
-- **Risk** — per-match inventory caps, stale-feed kill-switch, max-drawdown stop. Autonomous means safe to leave running.
-- **Solana** — quote/fill/settlement events are hashed and anchored on devnet; TxLINE's own validation proofs are verified against their on-chain program.
-- **Replay** — every live tick is recorded; the full agent runs against recorded feeds at 1×–10× speed, so it is fully demonstrable (and judge-testable) after the tournament ends.
+- **The trading core is a deterministic reducer** — state advances only via ticks, no wall
+  clock, no RNG. Same input stream ⇒ identical book, byte for byte (unit-tested).
+- **Quoting** ([docs/MODEL.md](docs/MODEL.md)): Avellaneda–Stoikov-inspired reservation
+  price with a *sum-neutral* inventory skew on net exposure, making the three-outcome quote
+  set arbitrage-free by construction (Σask ≥ 1 + 3δ_min). Spreads widen with EWMA
+  volatility; goal/VAR/red-card freezes and a price-jump circuit breaker run on feed time.
+- **Fills**: two deterministic legs — informed (consensus mid crossing a resting quote:
+  pure adverse selection, the stress case) and benign (fluid-limit of the A-S exponential
+  arrival intensity: spread-sensitive uninformed flow).
+- **P&L decomposition**: spread capture / inventory drift / settlement residual tracked
+  separately, so a lucky final score can't masquerade as skill.
+- **Risk**: net-exposure caps (reduce-only), drawdown flatten, stale-feed halt, ops
+  kill-switch (`POST /api/halt`) — autonomous means safe to leave running.
+- **Solana, both directions**: the anchorer merkle-hashes every engine event and posts the
+  root to devnet via Memo every 30 s (`scripts/verify-anchors.ts` proves the blotter wasn't
+  rewritten — flip one byte and it fails); `scripts/verify-txline-proof.ts` verifies
+  TxLINE's stat proofs against their on-chain program, byte-exact.
+- **Replay**: every live tick is recorded; the identical binary replays recordings at
+  1–10×, which is how the deployed demo runs after the tournament ends.
 
-## Status
+## Measured results (real data)
 
-🚧 Hackathon build in progress — see the [epic issue](../../issues/1) for the implementation plan and task breakdown.
+On the recorded England v Argentina semifinal (4,643 real TxLINE ticks): **92.9% two-sided
+quote uptime**, 317 fills, max net exposure 1.67 of cap 10, zero circuit-breaker
+false-fires, settled 1–2. P&L +2.60 stake units = spread capture +2.04, inventory drift
++0.53, settlement residual +0.03. Reproduce: `npx tsx scripts/stats.ts`.
 
-## TxLINE endpoints used
+## Run it
 
-- `POST /auth/guest/start` — guest JWT auth
-- Fixtures — World Cup fixture metadata
-- Odds — StablePrice snapshots, historical updates, live stream
-- Scores — snapshots + live score events
-- Validation proofs — on-chain verification against TxLINE's Solana devnet program
+```bash
+npm install
+npm test                 # 70 tests: determinism, no-arb, P&L identity, risk scenarios
+npx tsx src/index.ts     # replay mode on the committed real recording → localhost:8790
+```
+
+Live mode (requires TxLINE credentials in `.env` — see `.env.example`):
+
+```bash
+KEEPER_MODE=live npx tsx src/index.ts   # streams, quotes, records, anchors autonomously
+```
+
+Docker: `docker build -t keeper . && docker run -p 8790:8790 keeper`
+Deploy: `npx wrangler deploy` (Cloudflare Containers; secrets via `wrangler secret put`).
+
+## TxLINE integration
+
+All endpoints, verified semantics, and payload schemas: [docs/TXLINE.md](docs/TXLINE.md).
+Our API feedback log: [docs/FEEDBACK.md](docs/FEEDBACK.md). The quoting model with
+parameter justifications: [docs/MODEL.md](docs/MODEL.md).
 
 ## License
 
