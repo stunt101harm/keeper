@@ -14,9 +14,11 @@ import type {
   EngineEvent,
   FixtureInfo,
   Metrics,
+  OnchainState,
   Outcome,
   ParamsView,
   QuoteSet,
+  RecordingInfo,
   RiskTransition,
   ScoreTick,
   ServerSnapshot,
@@ -25,6 +27,7 @@ import type {
   Tick,
   Trade,
 } from './domain';
+import { applyMocks, MOCK_FLAGS } from './mock';
 
 const CHART_CAP = 5000;
 const BOOK_HISTORY_CAP = 3000;
@@ -103,6 +106,14 @@ export class KeeperStore {
   conn: ConnState = 'connecting';
   hydrated = false;
   mode: 'live' | 'replay' = 'replay';
+  /** What the orchestrator is actually running right now (wave-2; falls back to mode). */
+  activeSource: 'live' | 'replay' = 'replay';
+  /** keeper_book on-chain projection, when the server exposes it (wave-2). */
+  onchain: OnchainState | null = null;
+  /** Available replay recordings (wave-2; empty when the route is absent). */
+  recordings: RecordingInfo[] = [];
+  /** True while a POST /api/replay/select round-trip is in flight. */
+  switchingReplay = false;
   replay: { file: string; speed: number; loop: boolean } | null = null;
   params: ParamsView = {};
   halted = false;
@@ -170,10 +181,37 @@ export class KeeperStore {
     } catch {
       // server not up yet — SSE reconnect loop will retry hydration
     }
+    void this.loadRecordings();
+  }
+
+  /** Wave-2 route; degrades to an empty list (selector hidden) when absent. */
+  private async loadRecordings(): Promise<void> {
+    try {
+      const res = await fetch('/api/recordings');
+      if (!res.ok) return;
+      const body = (await res.json()) as { recordings?: RecordingInfo[] };
+      if (Array.isArray(body.recordings)) {
+        this.recordings = body.recordings;
+      }
+    } catch {
+      // route not shipped yet — leave recordings empty
+    }
+    if (MOCK_FLAGS.size > 0) applyMocks(this, MOCK_FLAGS);
+    this.bump();
   }
 
   private applySnapshot(snap: ServerSnapshot): void {
     this.mode = snap.mode;
+    // activeSource (wave-2) > status.mode (effective source) > config mode.
+    const src = snap.activeSource ?? snap.status?.mode ?? snap.mode;
+    this.activeSource = src === 'live' ? 'live' : 'replay';
+    // Accept onchain only when it matches the wave-2 contract shape; the
+    // server may send a partial/empty object while the chain module is wiring.
+    const oc = snap.onchain;
+    this.onchain =
+      oc && typeof oc.programId === 'string' && oc.books && typeof oc.books === 'object'
+        ? oc
+        : null;
     this.replay = snap.replay ?? null;
     this.params = snap.params ?? {};
     this.halted = snap.halted;
@@ -187,6 +225,7 @@ export class KeeperStore {
       buf.latestQuotes = fs.latestQuotes;
       buf.latestScore = fs.latestScore;
       buf.book = fs.book;
+      buf.settlement = fs.settlement ?? null;
       buf.chart = [...(fs.chart ?? [])];
       buf.trades = [...(fs.trades ?? [])];
       buf.riskLog = [...(fs.riskLog ?? [])];
@@ -204,6 +243,7 @@ export class KeeperStore {
       this.selectedFixture = next.keys().next().value ?? null;
     }
     this.hydrated = true;
+    if (MOCK_FLAGS.size > 0) applyMocks(this, MOCK_FLAGS);
     this.bump();
   }
 
@@ -324,6 +364,7 @@ export class KeeperStore {
 
   private onStatus(s: StatusEvent): void {
     this.status = s;
+    this.activeSource = s.mode === 'live' ? 'live' : 'replay';
     for (const f of s.fixtures) {
       const b = this.buf(f.id);
       if (!b.fixture) b.fixture = f;
@@ -336,6 +377,35 @@ export class KeeperStore {
   select(fixtureId: string): void {
     this.selectedFixture = fixtureId;
     this.bump();
+  }
+
+  /**
+   * Switch the active replay recording (wave-2). On success we reuse the
+   * loop-restart reset semantics for the whole projection: drop every fixture
+   * buffer and re-hydrate, so the new match starts from a clean slate.
+   */
+  async selectRecording(file: string): Promise<void> {
+    if (this.switchingReplay) return;
+    this.switchingReplay = true;
+    this.bump();
+    try {
+      const res = await fetch('/api/replay/select', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ file }),
+      });
+      if (res.ok) {
+        this.fixtures = new Map();
+        this.selectedFixture = null;
+        if (this.replay) this.replay = { ...this.replay, file };
+        await this.hydrate();
+      }
+    } catch {
+      // server unreachable or route absent — keep current state
+    } finally {
+      this.switchingReplay = false;
+      this.bump();
+    }
   }
 
   async setHalted(halt: boolean): Promise<void> {

@@ -4,10 +4,16 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-07-01",
   "observability": { "enabled": true },
+  // Keep-awake: the scheduled() handler pings the container's /health every
+  // 4 min (sleepAfter is 2h) so KEEPER_MODE=auto is always standing by to go
+  // live at kickoff — an asleep container cannot wake itself.
+  "triggers": { "crons": ["*/4 * * * *"] },
   "vars": {
     // api.devnet.solana.com blocks Cloudflare egress IPs — use a keyless
     // third-party devnet RPC for the anchorer (same fix as corner-case).
-    "SOLANA_RPC_URL": "https://rpc.magicblock.app/devnet"
+    "SOLANA_RPC_URL": "https://rpc.magicblock.app/devnet",
+    "ANCHOR_TARGET": "program",
+    "KEEPER_PROGRAM_ID": "BhstTkGhG1LLPYBt3E3n4PTZ3v1V6ukNHYvQ88rgvTHS"
   },
   "containers": [
     {

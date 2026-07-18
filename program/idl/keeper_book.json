@@ -1,0 +1,783 @@
+{
+  "address": "BhstTkGhG1LLPYBt3E3n4PTZ3v1V6ukNHYvQ88rgvTHS",
+  "metadata": {
+    "name": "keeper_book",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Keeper — on-chain market-maker book with proof-gated settlement via TxLINE Merkle proofs"
+  },
+  "instructions": [
+    {
+      "name": "init_book",
+      "docs": [
+        "Open the on-chain book for one fixture. The payer becomes the only",
+        "wallet that can record epochs; settlement stays permissionless."
+      ],
+      "discriminator": [
+        96,
+        122,
+        49,
+        43,
+        63,
+        61,
+        118,
+        152
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The maker. Pays rent and becomes the book's epoch-recording authority."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "book",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "fixture_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fixture_id",
+          "type": "i64"
+        },
+        {
+          "name": "epoch_day",
+          "type": "u16"
+        },
+        {
+          "name": "p1_is_home",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "record_epoch",
+      "docs": [
+        "Anchor one blotter batch: Merkle root over engine events",
+        "`[seq_start, seq_end)` plus the maker's inventory and mark-to-market",
+        "P&L at the end of the batch (stake units ×1e6).",
+        "",
+        "The continuity gate is the on-chain guarantee that the anchored",
+        "blotter has no gaps: each epoch must begin exactly where the previous",
+        "one ended (`seq_start == stored seq_end`, which starts at 0), so the",
+        "maker cannot quietly skip a range of events and keep anchoring.",
+        "",
+        "Deliberately still allowed AFTER settlement: the audit trail may keep",
+        "appending (post-final P&L snapshots flush late), while the settlement",
+        "verdict — proven_goals / winner / status — is written exactly once by",
+        "`settle_book` and never touched here. Rejecting late epochs would only",
+        "create a liveness footgun (an anchorer retrying a range forever), not",
+        "security."
+      ],
+      "discriminator": [
+        212,
+        29,
+        55,
+        154,
+        198,
+        1,
+        153,
+        253
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Only the maker that opened the book may extend its anchored history."
+          ],
+          "signer": true
+        },
+        {
+          "name": "book",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "book.fixture_id",
+                "account": "BookState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "seq_start",
+          "type": "u64"
+        },
+        {
+          "name": "seq_end",
+          "type": "u64"
+        },
+        {
+          "name": "inventory_micro",
+          "type": {
+            "array": [
+              "i64",
+              3
+            ]
+          }
+        },
+        {
+          "name": "mtm_pnl_micro",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "settle_book",
+      "docs": [
+        "Settle the book against TxLINE's proven final score. PERMISSIONLESS:",
+        "nothing the caller supplies can steer the outcome —",
+        "",
+        "- the payload either chains to TxLINE's own on-chain daily root",
+        "(checked by TxLINE itself, via CPI) or the whole tx aborts;",
+        "- the gates below pin WHICH proof is acceptable: this fixture's",
+        "(fixture bind), final whistle only (finality), the goal stats and",
+        "nothing else (stat-key bind), under the expected day's root",
+        "(epoch window);",
+        "- the winner is computed from the proven leaf values, not from any",
+        "argument.",
+        "",
+        "So the \"worst\" a malicious caller can do is settle the book correctly."
+      ],
+      "discriminator": [
+        62,
+        134,
+        1,
+        91,
+        53,
+        97,
+        135,
+        97
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Permissionless caller — pays the fee, controls nothing else."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "book",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  111,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "book.fixture_id",
+                "account": "BookState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "txline_roots",
+          "docs": [
+            "TxLINE's daily scores Merkle-root account for `epoch_day`.",
+            "TXORACLE_ID (never our own program id — the classic foreign-PDA bug)",
+            "and requires TxLINE ownership. A wrong-but-well-derived day simply",
+            "fails proof validation inside TxLINE."
+          ]
+        },
+        {
+          "name": "txline_program",
+          "docs": [
+            "CPI target is executable."
+          ],
+          "address": "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J"
+        }
+      ],
+      "args": [
+        {
+          "name": "epoch_day",
+          "type": "u16"
+        },
+        {
+          "name": "payload",
+          "type": {
+            "defined": {
+              "name": "StatValidationInput"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "BookState",
+      "discriminator": [
+        0,
+        203,
+        135,
+        146,
+        121,
+        129,
+        230,
+        179
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "BookSettled",
+      "discriminator": [
+        187,
+        104,
+        46,
+        146,
+        27,
+        78,
+        138,
+        194
+      ]
+    },
+    {
+      "name": "EpochRecorded",
+      "discriminator": [
+        52,
+        120,
+        158,
+        92,
+        14,
+        193,
+        165,
+        87
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "signer is not the book authority"
+    },
+    {
+      "code": 6001,
+      "name": "ContinuityBroken",
+      "msg": "record_epoch seq_start does not equal the stored seq_end — blotter continuity broken"
+    },
+    {
+      "code": 6002,
+      "name": "EmptyEpochRange",
+      "msg": "record_epoch range is empty (seq_end must be > seq_start)"
+    },
+    {
+      "code": 6003,
+      "name": "AlreadySettled",
+      "msg": "book is already settled"
+    },
+    {
+      "code": 6004,
+      "name": "EpochDayOutOfRange",
+      "msg": "epoch_day must be the book's stored day or the next day"
+    },
+    {
+      "code": 6005,
+      "name": "FixtureMismatch",
+      "msg": "proof is for a different fixture than this book"
+    },
+    {
+      "code": 6006,
+      "name": "StatKeysMismatch",
+      "msg": "proof leaves must be exactly the goal stat keys [1, 2], in order"
+    },
+    {
+      "code": 6007,
+      "name": "ProofNotFinal",
+      "msg": "proof leaf is not from the game_finalised record (period != 100)"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidRootsAccount",
+      "msg": "txline_roots is not the daily_scores_roots PDA for this epoch_day"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidTxlineProgram",
+      "msg": "txline_program is not the TxLINE txoracle program"
+    },
+    {
+      "code": 6010,
+      "name": "NoValidationResult",
+      "msg": "TxLINE returned no validation result"
+    }
+  ],
+  "types": [
+    {
+      "name": "BookSettled",
+      "docs": [
+        "Emitted exactly once per book, when a TxLINE proof settles it."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fixture_id",
+            "type": "i64"
+          },
+          {
+            "name": "proven_goals",
+            "docs": [
+              "Proven final [P1 goals, P2 goals]."
+            ],
+            "type": {
+              "array": [
+                "i32",
+                2
+              ]
+            }
+          },
+          {
+            "name": "winner",
+            "docs": [
+              "WINNER_P1 | WINNER_DRAW | WINNER_P2."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "epoch_day",
+            "docs": [
+              "Epoch-day whose TxLINE root the proof verified against."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "proof_ts",
+            "docs": [
+              "Timestamp of the proven score record (ms epoch, from the proof)."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BookState",
+      "docs": [
+        "One market-maker book per fixture. PDA: `[\"book\", fixture_id i64 LE]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "The maker's wallet — the only signer allowed to record epochs."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "fixture_id",
+            "docs": [
+              "TxLINE fixture id (i64 to match TxLINE's own encoding)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "epoch_day",
+            "docs": [
+              "Kickoff epoch-day (UTC days since epoch). Settlement accepts proofs",
+              "under this day's root or the next (evening kickoffs finalise past",
+              "00:00 UTC)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "p1_is_home",
+            "docs": [
+              "TxLINE `Participant1IsHome` — maps proven P1/P2 goals to home/away."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "epoch_count",
+            "docs": [
+              "Number of epochs recorded so far."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "latest_root",
+            "docs": [
+              "Merkle root of the most recent anchored blotter batch."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "seq_end",
+            "docs": [
+              "EXCLUSIVE end of the anchored seq range == the next expected",
+              "`seq_start` == total events anchored. Storing the exclusive bound makes",
+              "the continuity check a single equality (`seq_start == seq_end`) with no",
+              "first-epoch special case."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "inventory_micro",
+            "docs": [
+              "Signed inventory per outcome [home, draw, away], stake units ×1e6."
+            ],
+            "type": {
+              "array": [
+                "i64",
+                3
+              ]
+            }
+          },
+          {
+            "name": "mtm_pnl_micro",
+            "docs": [
+              "Mark-to-market P&L at the last recorded epoch, stake units ×1e6."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "STATUS_OPEN | STATUS_SETTLED."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "proven_goals",
+            "docs": [
+              "Final [P1 goals, P2 goals] proven by TxLINE. Meaningful once settled."
+            ],
+            "type": {
+              "array": [
+                "i32",
+                2
+              ]
+            }
+          },
+          {
+            "name": "winner",
+            "docs": [
+              "WINNER_P1 | WINNER_DRAW | WINNER_P2, WINNER_UNSET until settled."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EpochRecorded",
+      "docs": [
+        "Emitted once per anchored blotter batch. Together with the on-chain",
+        "continuity gate this forms a gap-free, queryable audit trail: replaying a",
+        "book's EpochRecorded events reconstructs the full anchored history, and",
+        "`scripts/verify-anchors.ts` checks each event's root against a local",
+        "recomputation from the blotter."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fixture_id",
+            "type": "i64"
+          },
+          {
+            "name": "epoch_count",
+            "type": "u32"
+          },
+          {
+            "name": "root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "seq_start",
+            "docs": [
+              "Inclusive start of the anchored seq range."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "seq_end",
+            "docs": [
+              "EXCLUSIVE end of the anchored seq range."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "inventory_micro",
+            "type": {
+              "array": [
+                "i64",
+                3
+              ]
+            }
+          },
+          {
+            "name": "mtm_pnl_micro",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProofNode",
+      "docs": [
+        "One sibling hash in a Merkle path."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "is_right_sibling",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ScoreStat",
+      "docs": [
+        "A single provable key/value statistic — the innermost Merkle leaf.",
+        "`period` is the match-status period of the underlying score record",
+        "(3 = halftime, 100 = game finalised), NOT the stat key's period prefix."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "key",
+            "type": "u32"
+          },
+          {
+            "name": "value",
+            "type": "i32"
+          },
+          {
+            "name": "period",
+            "type": "i32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ScoresBatchSummary",
+      "docs": [
+        "Fixture-level summary — the node that binds a proof to ONE fixture.",
+        "`fixture_id` living inside the proven chain is what makes on-chain fixture",
+        "binding possible (the FixtureMismatch gate below)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fixture_id",
+            "type": "i64"
+          },
+          {
+            "name": "update_stats",
+            "type": {
+              "defined": {
+                "name": "ScoresUpdateStats"
+              }
+            }
+          },
+          {
+            "name": "events_sub_tree_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ScoresUpdateStats",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "update_count",
+            "type": "i32"
+          },
+          {
+            "name": "min_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "max_timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StatLeaf",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stat",
+            "type": {
+              "defined": {
+                "name": "ScoreStat"
+              }
+            }
+          },
+          {
+            "name": "stat_proof",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "ProofNode"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "StatValidationInput",
+      "docs": [
+        "Full `validate_stat_v2` payload (TxLINE IDL: `StatValidationInput`),",
+        "exactly as the stat-validation endpoint hands it to the settler. Borsh",
+        "round-trips are canonical: deserializing the caller-built payload and",
+        "re-serializing it here yields identical bytes, so the proof the caller",
+        "fetched is the proof TxLINE verifies."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ts",
+            "type": "i64"
+          },
+          {
+            "name": "fixture_summary",
+            "type": {
+              "defined": {
+                "name": "ScoresBatchSummary"
+              }
+            }
+          },
+          {
+            "name": "fixture_proof",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "ProofNode"
+                }
+              }
+            }
+          },
+          {
+            "name": "main_tree_proof",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "ProofNode"
+                }
+              }
+            }
+          },
+          {
+            "name": "event_stat_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "stats",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "StatLeaf"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

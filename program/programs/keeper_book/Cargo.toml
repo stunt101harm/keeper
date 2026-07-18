@@ -1,0 +1,20 @@
+[package]
+name = "keeper_book"
+version = "0.1.0"
+description = "Keeper — on-chain market-maker book with proof-gated settlement via TxLINE Merkle proofs"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "keeper_book"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "0.31.1"

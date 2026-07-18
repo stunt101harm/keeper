@@ -7,6 +7,7 @@ import { Header } from './components/Header';
 import { MoneyChart } from './components/MoneyChart';
 import { QuoteBoard } from './components/QuoteBoard';
 import { RiskLogPanel } from './components/RiskLogPanel';
+import { SettlementBanner } from './components/SettlementBanner';
 
 export function App() {
   const store = useStore();
@@ -21,6 +22,8 @@ export function App() {
   return (
     <div className="app">
       <Header buf={buf} />
+
+      <SettlementBanner buf={buf} />
 
       {bufs.length > 1 && (
         <div className="tabs">

@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
-import type { RiskStateName } from '../domain';
+import type { RecordingInfo, RiskStateName } from '../domain';
 import { RISK_BADGE } from '../domain';
 import { fmtClock } from '../format';
 import { useNow, useStore } from '../hooks';
 import type { FixtureBuf } from '../store';
+import { JudgeModal } from './JudgeModal';
+
+const basename = (p: string): string => p.split('/').pop() ?? p;
+
+const recordingLabel = (r: RecordingInfo): string =>
+  r.fixture ? `${r.fixture.home} v ${r.fixture.away}` : basename(r.file).replace(/\.jsonl$/, '');
 
 function feedState(
   conn: string,
@@ -20,6 +26,14 @@ export function Header({ buf }: { buf: FixtureBuf | null }) {
   const store = useStore();
   const now = useNow(1000);
   const [confirmHalt, setConfirmHalt] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+
+  const live = store.activeSource === 'live';
+  const showSelector = !live && store.recordings.length > 1;
+  const currentFile =
+    store.recordings.find((r) => basename(r.file) === basename(store.replay?.file ?? ''))?.file ??
+    store.recordings[0]?.file ??
+    '';
 
   useEffect(() => {
     if (!confirmHalt) return;
@@ -80,15 +94,35 @@ export function Header({ buf }: { buf: FixtureBuf | null }) {
         </div>
       )}
       <div className="header-right">
+        {showSelector && (
+          <select
+            className="replay-select"
+            value={currentFile}
+            disabled={store.switchingReplay}
+            onChange={(e) => void store.selectRecording(e.target.value)}
+            title="switch replay recording"
+          >
+            {store.recordings.map((r) => (
+              <option key={r.file} value={r.file}>
+                {recordingLabel(r)}
+              </option>
+            ))}
+          </select>
+        )}
         <span
           className="badge"
           style={{
-            color: store.mode === 'live' ? 'var(--critical)' : 'var(--ink-2)',
-            background:
-              store.mode === 'live' ? 'rgba(208,59,59,0.14)' : 'rgba(154,164,178,0.10)',
+            color: live ? 'var(--critical)' : 'var(--ink-2)',
+            background: live ? 'rgba(208,59,59,0.14)' : 'rgba(154,164,178,0.10)',
           }}
         >
-          {store.mode === 'live' ? '● LIVE' : `REPLAY ×${store.replay?.speed ?? 1}`}
+          {live ? (
+            <>
+              <span className="dot live" /> LIVE
+            </>
+          ) : (
+            `REPLAY ×${store.replay?.speed ?? 1}`
+          )}
         </span>
         <span
           className="badge"
@@ -105,6 +139,13 @@ export function Header({ buf }: { buf: FixtureBuf | null }) {
           {risk.label}
         </span>
         <button
+          className="info-btn"
+          onClick={() => setShowInfo(true)}
+          title="60-second orientation for reviewers"
+        >
+          ⓘ what am I looking at
+        </button>
+        <button
           className={`halt-btn ${store.halted ? 'resume' : ''} ${confirmHalt ? 'confirm' : ''}`}
           onClick={onHalt}
           title={
@@ -116,6 +157,7 @@ export function Header({ buf }: { buf: FixtureBuf | null }) {
           {store.halted ? 'RESUME' : confirmHalt ? 'CONFIRM HALT?' : 'HALT'}
         </button>
       </div>
+      {showInfo && <JudgeModal onClose={() => setShowInfo(false)} live={live} />}
     </header>
   );
 }

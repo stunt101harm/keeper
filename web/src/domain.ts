@@ -35,6 +35,7 @@ import type {
   RiskStateName,
   RiskTransition,
   ScoreTick,
+  SettlementEvent,
   StatusEvent,
   Trade,
 } from '@keeper/types';
@@ -97,6 +98,35 @@ export interface FixtureSnapshot {
   chart: QuoteSet[];
   trades: Trade[];
   riskLog: RiskTransition[];
+  /** Wave-2 (optional until the server ships it): last settlement, if any. */
+  settlement?: SettlementEvent | null;
+}
+
+/** One keeper_book PDA's projected state (wave-2 contract, docs/CONTRACTS-WAVE2.md). */
+export interface OnchainBook {
+  address: string;
+  latestRoot: string;
+  seqEnd: number;
+  epochCount: number;
+  status: 'open' | 'settled';
+  provenGoals?: [number, number];
+  winner?: 'p1' | 'draw' | 'p2';
+  settleSig?: string;
+  explorerUrl: string;
+}
+
+export interface OnchainState {
+  programId: string;
+  network: 'devnet';
+  books: Record<string, OnchainBook>;
+}
+
+/** One entry of GET /api/recordings (wave-2 contract). */
+export interface RecordingInfo {
+  file: string;
+  fixture: FixtureInfo | null;
+  ticks: number;
+  bytes: number;
 }
 
 /** Shape of GET /api/state. */
@@ -109,4 +139,8 @@ export interface ServerSnapshot {
   metrics: Metrics;
   anchors: AnchorBatch[];
   fixtures: Record<string, FixtureSnapshot>;
+  /** Wave-2: what the orchestrator is actually running right now. */
+  activeSource?: 'live' | 'replay';
+  /** Wave-2: keeper_book program projection, when the chain module is wired. */
+  onchain?: OnchainState;
 }

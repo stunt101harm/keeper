@@ -5,9 +5,12 @@ import { log } from '../log.js';
 import type { FixtureInfo, Tick } from '../types.js';
 
 /**
- * Appends every tick seen on the bus to a per-fixture JSONL recording.
- * Runs only in live mode; recordings are the substrate for replay demos,
- * judge testing, and golden tests.
+ * Appends every tick to a per-fixture JSONL recording. Runs whenever live
+ * ingestion is active: in live mode via attach(bus); in auto mode the
+ * composition root calls record() directly from the live onTick path so
+ * replay-phase ticks (which also cross the bus) are never recorded.
+ * Recordings are the substrate for replay demos, judge testing, and golden
+ * tests.
  */
 export class Recorder {
   private streams = new Map<string, WriteStream>();
@@ -21,7 +24,12 @@ export class Recorder {
   }
 
   attach(bus: Bus): void {
-    bus.on('tick', (tick) => this.write(tick));
+    bus.on('tick', (tick) => this.record(tick));
+  }
+
+  /** Append one tick (meta line written lazily per fixture). */
+  record(tick: Tick): void {
+    this.write(tick);
   }
 
   private streamFor(fixtureId: string): WriteStream {

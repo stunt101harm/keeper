@@ -4,8 +4,14 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Bus } from '../bus.js';
 import { loadConfig, type Config } from '../config.js';
-import type { AnchorBatch, EngineEvent, RiskTransition } from '../types.js';
-import { MAX_BATCH_EVENTS, startAnchorer, type AnchorerHandle } from './anchorer.js';
+import type { AnchorBatch, BookSnapshot, EngineEvent, RiskTransition } from '../types.js';
+import {
+  MAX_BATCH_EVENTS,
+  startAnchorer,
+  toMicro,
+  type AnchorerHandle,
+  type EpochCommit,
+} from './anchorer.js';
 import { leafHash, merkleRoot } from './merkle.js';
 
 const makeEvent = (i: number): EngineEvent =>
@@ -17,6 +23,18 @@ const makeEvent = (i: number): EngineEvent =>
     to: 'quoting',
     reason: `e${i}`,
   }) satisfies RiskTransition;
+
+const makeBookEvent = (inv: [number, number, number], mtmPnl: number, ts = 2000): BookSnapshot => ({
+  kind: 'book',
+  fixtureId: 'fx1',
+  ts,
+  inventory: { home: inv[0], draw: inv[1], away: inv[2] },
+  netExposure: { home: 0, draw: 0, away: 0 },
+  realizedPnl: 0,
+  mtmPnl,
+  pnl: { spreadCapture: 0, inventoryDrift: 0, settlementResidual: 0 },
+  tradeCount: 0,
+});
 
 const makeConfig = (): Config => {
   const config = loadConfig({
@@ -154,5 +172,114 @@ describe('startAnchorer', () => {
     await h.runCycle();
     expect(fs.existsSync(path.join(dataDir, 'events.jsonl'))).toBe(false);
     h.stop();
+  });
+
+  describe('ANCHOR_TARGET=program', () => {
+    const makeProgramConfig = (): Config => {
+      const config = makeConfig();
+      config.solana.anchorTarget = 'program';
+      config.solana.programId = 'BhstTkGhG1LLPYBt3E3n4PTZ3v1V6ukNHYvQ88rgvTHS';
+      return config;
+    };
+
+    it('routes batches to record_epoch with book state in micro units', async () => {
+      const bus = new Bus();
+      const commits: EpochCommit[] = [];
+      const sendEpoch = async (c: EpochCommit): Promise<string> => {
+        commits.push(c);
+        return `epoch-sig-${commits.length}`;
+      };
+      handle = startAnchorer({ bus, config: makeProgramConfig(), sendEpoch, dataDir });
+
+      bus.publishEngine(makeEvent(0));
+      bus.publishEngine(makeEvent(1));
+      bus.publishEngine(makeBookEvent([1.5, -0.25, 0], 0.123456, 2001));
+      await handle.runCycle();
+
+      expect(commits).toHaveLength(1);
+      const commit = commits[0]!;
+      expect(commit.fixtureId).toBe('fx1');
+      expect(commit.seqStart).toBe(0);
+      expect(commit.seqEnd).toBe(2); // inclusive blotter bound
+      expect(commit.inventoryMicro).toEqual([1_500_000, -250_000, 0]);
+      expect(commit.mtmPnlMicro).toBe(123_456);
+      expect(commit.tsMs).toBe(2001);
+      const expectedRoot = merkleRoot(bus.engineLog.slice(0, 3).map((r) => leafHash(r))).toString(
+        'hex',
+      );
+      expect(commit.rootHex).toBe(expectedRoot);
+
+      // continuity across cycles: next batch starts exactly where this ended,
+      // and a batch WITHOUT a book snapshot reuses the latest known one.
+      bus.publishEngine(makeEvent(3));
+      await handle.runCycle();
+      expect(commits).toHaveLength(2);
+      expect(commits[1]!.seqStart).toBe(3);
+      expect(commits[1]!.seqEnd).toBe(3);
+      expect(commits[1]!.inventoryMicro).toEqual([1_500_000, -250_000, 0]);
+
+      // anchors.jsonl records are tagged for verify-anchors target detection
+      const anchorLines = fs
+        .readFileSync(path.join(dataDir, 'anchors.jsonl'), 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as AnchorBatch & { target?: string; fixtureId?: string });
+      expect(anchorLines).toHaveLength(2);
+      for (const rec of anchorLines) {
+        expect(rec.target).toBe('program');
+        expect(rec.fixtureId).toBe('fx1');
+        expect(rec.status).toBe('confirmed');
+        expect(rec.sig).toMatch(/^epoch-sig-/);
+      }
+    });
+
+    it('keeps the failed range queued when record_epoch fails', async () => {
+      const bus = new Bus();
+      let fail = true;
+      const commits: EpochCommit[] = [];
+      handle = startAnchorer({
+        bus,
+        config: makeProgramConfig(),
+        sendEpoch: async (c) => {
+          if (fail) throw new Error('rpc down');
+          commits.push(c);
+          return 'sig';
+        },
+        dataDir,
+      });
+      bus.publishEngine(makeEvent(0));
+      await handle.runCycle();
+      expect(commits).toHaveLength(0);
+      fail = false;
+      await handle.runCycle();
+      expect(commits).toHaveLength(1);
+      expect(commits[0]!.seqStart).toBe(0);
+    });
+
+    it('falls back to memo when program target lacks a program id', async () => {
+      const bus = new Bus();
+      const config = makeConfig();
+      config.solana.anchorTarget = 'program'; // …but no programId configured
+      const sent: string[] = [];
+      handle = startAnchorer({
+        bus,
+        config,
+        send: async (p) => {
+          sent.push(p);
+          return 'memo-sig';
+        },
+        dataDir,
+      });
+      bus.publishEngine(makeEvent(0));
+      await handle.runCycle();
+      expect(sent).toHaveLength(1);
+      expect(JSON.parse(sent[0]!)).toMatchObject({ app: 'keeper', seqStart: 0, seqEnd: 0 });
+    });
+
+    it('toMicro rounds to integer micro units', () => {
+      expect(toMicro(1.2345678)).toBe(1_234_568);
+      expect(toMicro(-0.25)).toBe(-250_000);
+      expect(toMicro(0)).toBe(0);
+    });
   });
 });

@@ -18,7 +18,8 @@
  * also absorbs the snapshot/stream overlap during seeding).
  *
  * startLiveIngest resolves once discovery + seeding + stream startup are
- * launched; the streams and the refresh timer keep running in the background.
+ * launched; the streams and the refresh timer keep running in the background
+ * until the returned handle's stop() is called (auto mode flips sources).
  */
 
 import type { Config } from '../config.js';
@@ -35,10 +36,15 @@ export interface LiveIngestDeps {
   onFixtures(fixtures: FixtureInfo[]): void;
 }
 
+export interface LiveIngestHandle {
+  /** Stop fixture discovery and both SSE streams. Idempotent. */
+  stop(): void;
+}
+
 const FIXTURE_REFRESH_MS = 10 * 60_000;
 const MS_PER_DAY = 86_400_000;
 
-export async function startLiveIngest(deps: LiveIngestDeps): Promise<void> {
+export async function startLiveIngest(deps: LiveIngestDeps): Promise<LiveIngestHandle> {
   const { config } = deps;
   const auth = new TxlineAuth(config.txline); // throws early if no API token
   const client = new TxlineClient(auth);
@@ -133,7 +139,7 @@ export async function startLiveIngest(deps: LiveIngestDeps): Promise<void> {
 
   // The two streams are fully independent loops: separate sockets, separate
   // backoff ladders. Records for untracked fixtures are dropped up front.
-  streamRecords<OddsRecord>(
+  const oddsStream = streamRecords<OddsRecord>(
     auth,
     '/odds/stream',
     {
@@ -144,7 +150,7 @@ export async function startLiveIngest(deps: LiveIngestDeps): Promise<void> {
       onStatus: streamLogger('odds'),
     },
   );
-  streamRecords<ScoreRecord>(
+  const scoresStream = streamRecords<ScoreRecord>(
     auth,
     '/scores/stream',
     {
@@ -160,4 +166,13 @@ export async function startLiveIngest(deps: LiveIngestDeps): Promise<void> {
     { network: config.txline.network, tracked: tracked.size },
     'ingest: live ingestion started (odds + scores streams)',
   );
+
+  return {
+    stop(): void {
+      clearInterval(refreshTimer);
+      oddsStream.stop();
+      scoresStream.stop();
+      log.info('ingest: live ingestion stopped (source switch)');
+    },
+  };
 }
