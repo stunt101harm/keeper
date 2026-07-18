@@ -57,4 +57,17 @@ submission requirements; edited into a final section before submitting.
 - **Liked: proof + root retention on devnet** made all of this verifiable days after the
   match — our replay demo verifies a semifinal proof against the on-chain root live.
 
+## 2026-07-18 (on-chain program build)
+
+- **Friction (undocumented validator rule): `validate_stat_v2` rejects strategies that
+  don't evaluate every proven leaf** (`IncompleteStatCoverage`, error 6071, hit live). We
+  wanted to prove two leaves (goals P1/P2) with a trivial always-true predicate over one
+  leaf — not allowed; the strategy must cover all leaves (our fix: `Binary{leaf0 + leaf1 >
+  -1}`). Reasonable rule, but only discoverable by hitting the error on devnet.
+- **Liked: CPI integration is genuinely production-grade.** Return-data bool, typed errors
+  on tampered proofs, ~200k CU, and a stable discriminator — our settlement program binds
+  to it with ~60 lines of hand-written interface. TxLINE's on-chain half is not a gimmick;
+  you can build real trustless settlement on it, and we did (program
+  `BhstTkGhG1LLPYBt3E3n4PTZ3v1V6ukNHYvQ88rgvTHS`, permissionless `settle_book`).
+
 _(entries appended as the build continues)_

@@ -2,9 +2,10 @@
 
 **An autonomous in-play market maker for World Cup outcomes, powered by TxLINE.**
 
-🔴 **Live demo: <https://keeper.h-dhaliwal2250.workers.dev>** — replaying the real
-England v Argentina semifinal (actual TxLINE tick data) at 10× on Cloudflare Containers,
-anchoring its book to Solana devnet as it runs.
+🔴 **Live demo: <https://keeper.h-dhaliwal2250.workers.dev>** — running in **auto mode** on
+Cloudflare Containers: it flips itself to live ingestion whenever a World Cup match is
+in-play and replays real recorded TxLINE tick data at 10× otherwise — anchoring its book
+into an on-chain program as it runs.
 
 Keeper quotes continuous two-way prices on live 1X2 match outcomes. It ingests TxLINE's
 demargined StablePrice consensus and score streams, computes fair value, and quotes around it
@@ -39,19 +40,43 @@ data it trades on. Built for the TxLINE World Cup Hackathon (agent track).
   separately, so a lucky final score can't masquerade as skill.
 - **Risk**: net-exposure caps (reduce-only), drawdown flatten, stale-feed halt, ops
   kill-switch (`POST /api/halt`) — autonomous means safe to leave running.
-- **Solana, both directions**: the anchorer merkle-hashes every engine event and posts the
-  root to devnet via Memo every 30 s (`scripts/verify-anchors.ts` proves the blotter wasn't
-  rewritten — flip one byte and it fails); `scripts/verify-txline-proof.ts` verifies
-  TxLINE's stat proofs against their on-chain program, byte-exact.
+- **Autonomous lifecycle**: in auto mode the orchestrator discovers fixtures from TxLINE
+  itself, flips to live ingestion 30 min before kickoff, back to replay after the match —
+  and settles its own book on-chain after full time. No human input at any point.
 - **Replay**: every live tick is recorded; the identical binary replays recordings at
-  1–10×, which is how the deployed demo runs after the tournament ends.
+  1–10×, which is how the deployed demo runs after the tournament ends (a header dropdown
+  switches between seven recorded real matches).
 
-## Measured results (real data)
+## Fully on-chain: the `keeper_book` program
 
-On the recorded England v Argentina semifinal (4,643 real TxLINE ticks): **92.9% two-sided
-quote uptime**, 317 fills, max net exposure 1.67 of cap 10, zero circuit-breaker
-false-fires, settled 1–2. P&L +2.60 stake units = spread capture +2.04, inventory drift
-+0.53, settlement residual +0.03. Reproduce: `npx tsx scripts/stats.ts`.
+The book doesn't just hash to the chain — it *lives* there, in a purpose-built Anchor
+program on devnet: **[`BhstTkGhG1LLPYBt3E3n4PTZ3v1V6ukNHYvQ88rgvTHS`](https://explorer.solana.com/address/BhstTkGhG1LLPYBt3E3n4PTZ3v1V6ukNHYvQ88rgvTHS?cluster=devnet)**
+([source](program/programs/keeper_book/src/lib.rs)).
+
+- **Typed book accounts** — one PDA per fixture holding the latest blotter merkle root,
+  inventory, and mark-to-market P&L, updated every 30 s by `record_epoch`. The program
+  enforces **seq continuity on-chain**: each epoch must start exactly where the last ended,
+  so the audit trail provably has no gaps.
+- **Proof-gated settlement** — `settle_book` is *permissionless* and can only settle by
+  CPI into **TxLINE's own on-chain verifier** (`validate_stat_v2`) with a real match proof:
+  the program checks finality (every proven stat carries the game-finalised period), binds
+  the proof to the fixture, and derives the winner from the *proven* goals. Keeper cannot
+  self-report an outcome; nobody can.
+- **Live artifact**: the England v Argentina book —
+  [11 epochs recorded, settled on-chain with the proven 1–2 score](https://explorer.solana.com/address/5CU5vsibB7UKqFz4c3bS1aHiBmvKnUMDwTYEYCW1p96F?cluster=devnet)
+  ([settle tx](https://explorer.solana.com/tx/5b8GLm2CmVNR33iAbd5i8b2DS69TsEx9vKAhWT8vWiS2bA8Fm3jgdxrcgca9SUoWYJ7fdYAKtmoTn29gxexRaVZH?cluster=devnet)).
+- **Tamper evidence**: `scripts/verify-anchors.ts` recomputes every epoch root from the
+  local blotter and checks it against the on-chain events — flip one byte and it fails.
+  `scripts/verify-txline-proof.ts` independently verifies TxLINE's proofs byte-exact
+  (leaf hashing → 5-minute batch root → the `daily_scores_roots` PDA).
+
+## Measured results (7 real matches)
+
+Backtested over seven reconstructed real World Cup matches (R16 → semifinals, ~24k real
+TxLINE ticks — full tables in [docs/BACKTEST.md](docs/BACKTEST.md)): **positive P&L in 7/7
+matches** with quote uptime 73–97% and spread capture positive in every match (the
+component that measures making markets, not getting lucky — the decomposition keeps the
+two honest). Parameter-sensitivity sweep included. Reproduce: `npx tsx scripts/backtest.ts`.
 
 ## Run it
 

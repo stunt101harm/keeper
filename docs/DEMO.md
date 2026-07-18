@@ -43,25 +43,35 @@ Beats, in order (practice the cursor path):
    drawdown flatten. Autonomous means safe to leave running."
 6. Full time: settlement event, final P&L.
 
-## 3:30–4:15 — The Solana story (both directions)
+## 3:30–4:15 — The on-chain story (the climax)
 
-1. Chain panel: click an anchor tx → Solana explorer (devnet) showing the memo with the
-   merkle root. "Every 30 seconds Keeper anchors its event log. Here's the tamper check:"
-2. Terminal: `npx tsx scripts/verify-anchors.ts` → all MATCH. Flip one byte in
-   `data/events.jsonl` (`sed` one-liner), re-run → MISMATCH, exit 1. "The blotter can't be
-   rewritten after the fact — a provable track record."
-3. "And it goes both ways — TxLINE anchors *their* data too:"
-   `npx tsx scripts/verify-txline-proof.ts 18241006 962 1,2` → proof verifies against the
-   on-chain daily roots. "We verify the feed we trade on."
+1. Chain panel: point at the **keeper_book program** card — book account, latest root,
+   "anchored through seq N", epoch count. "The book doesn't hash to the chain — it *lives*
+   there. A program account per match, updated every 30 seconds, and the program enforces
+   sequence continuity on-chain: the audit trail provably has no gaps."
+2. The settled book: "Here's last night's France v England book — **settled on-chain, and
+   not by us**: settlement is permissionless and only succeeds by CPI into TxLINE's own
+   on-chain verifier with the real match proof. The proven final score decides the winner.
+   Keeper *cannot* self-report an outcome." Click the settle tx → explorer.
+3. Tamper check, terminal: `npx tsx scripts/verify-anchors.ts` → all MATCH; flip one byte
+   in `data/events.jsonl`, re-run → MISMATCH exit 1. "A provable track record."
+4. "And we verify the feed we trade on, independently:"
+   `npx tsx scripts/verify-txline-proof.ts 18241006 962 1,2` → byte-exact against the
+   on-chain daily roots.
 
-## 4:15–5:00 — Production readiness + close
+## 4:15–5:00 — Autonomy + production readiness + close
 
-- `curl /health`, `/metrics`, `POST /api/halt` flipping the badge to HALTED and back.
-- "One Docker image, deployed at <URL>, replay mode after the tournament so you can test it
-  yourself. TypeScript, fully unit-tested — determinism, no-arbitrage across the outcome
-  set, and the P&L identity are all property tests."
-- Close: "Keeper — an autonomous market maker with an auditable book. Data by TxLINE,
-  audit trail on Solana."
+- "Last night nobody touched it: the deployed instance discovered France v England from
+  the fixtures feed, flipped itself to live ingestion 30 minutes before kickoff, traded
+  the whole match, recorded every tick, and settled its book on-chain after full time.
+  That's what autonomous means here." (If footage exists: 5s clip of the LIVE badge
+  during the match.)
+- Backtest slide/scroll: docs/BACKTEST.md table — "positive P&L in all seven real matches
+  we reconstructed, spread capture positive in every one — and the decomposition is
+  exactly how we'd catch it if that were luck."
+- `curl /health`, `POST /api/halt` flipping the badge — "the one human control."
+- Close: "Keeper — an autonomous market maker whose entire book is an on-chain fact.
+  Data by TxLINE, settlement proven by TxLINE's own program."
 
 ## Recording checklist
 
